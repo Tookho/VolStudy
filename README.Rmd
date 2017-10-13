@@ -1,0 +1,8 @@
+---
+title: "README"
+output: html_document
+---
+
+# Purpose
+
+This folder contains the CQ blogto be hosted as blog.curiousquant.com
