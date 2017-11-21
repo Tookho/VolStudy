@@ -1,8 +1,98 @@
----
-title: "README"
+------
+title: "VolstudyREADME"
 output: html_document
 ---
+#Aim
 
-# Purpose
+The aim of this project is to uncover the extent of correlation among South African assets at sector level. Thereafter, other countries are analysed to provide a benchmark of some sort for South Africa in this context.The data will be stratified such that, the highest correclation (80%) will be compared across countries, and so will the lowest (20%).
+  *....
+  *....
+  *etc...
+  
+# Techniques used
 
-This folder contains the CQ blogto be hosted as blog.curiousquant.com
+  * GO-Garch models...
+  
+# Data
+  Returns data
+  *...
+  adding git.ignore filder
+  .Rproj.user
+  .Rhistory
+  .RData
+  .Ruserdata
+Data
+# Packages used
+library(rmsfuns)
+load_pkg(c("tidyverse", "tbl2xts", "devtools", "lubridate", "PerformanceAnalytics", "ggplot2"))
+
+#Miscelleneuos notes
+  *Note when running the function...it takes 20 min.
+  *
+  
+  
+#Paper
+## Introduction
+
+Here I intend introducing the paper and what it does...
+
+##methodology
+list code
+  (R)
+list.files("code, full.names = TRUE")
+
+#data import
+
+
+```{r}
+library(rmsfuns)
+load_pkg(c("tidyverse", "tbl2xts", "devtools", "lubridate", "PerformanceAnalytics", "ggplot2"))
+ReturnsData <- 
+  read_rds("C:/Users/tookho.putsoane/Dropbox/ReturnData/ReturnsData.rds")
+ #          col_types = cols(.default = "d", Date = "D")) ##did not work, please help##
+
+# selecting SA sector level data
+SA_returnsdata <-
+  ReturnsData %>% 
+  select(date, Ticker, Universe, BICS_LEVEL_1_SECTOR_NAME, Return)%>%
+  filter(Universe == "JALSHAll")
+
+
+#creating returns 
+
+# dlog returns:
+SA_rtn <- (
+  diff( log(SA_returnsdata %>% arrange(date) %>% tbl_xts()), lag=1))*100 
+# this code returns the following Warning message:
+#In log(Sector_SA_returnsdata %>% arrange(date) %>% tbl_xts()) :
+ # NaNs produced
+
+
+#drop the first observation and corresponding date:
+SA_rtn <- SA_rtn[-1,]
+# Center the data:
+SA_rtn <- scale(SA_rtn,center=T,scale=F) 
+
+colnames(SA_rtn) <- 
+  colnames(SA_rtn) %>% gsub("BICS_LEVEL_1_SECTOR_NAME.","",.) %>%                   gsub(".Close","",.)
+
+###Attention Nico###
+# And clean it using Boudt's technique:
+SA_rtn <- Return.clean(SA_rtn, method = c("none", "boudt", "geltner")[2], alpha=0.01)
+# This code returs the following error message: 
+#Error in 1:T : argument of length 0
+```
+
+
+
+
+
+
+
+##list review
+
+##results
+
+##Conclusion
+
+
