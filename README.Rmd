@@ -51,21 +51,29 @@ ReturnsData <-
   read_rds("C:/Users/tookho.putsoane/Dropbox/ReturnData/ReturnsData.rds")
  #          col_types = cols(.default = "d", Date = "D")) ##did not work, please help##
 
-# selecting SA sector level data
-SA_returnsdata <-
+#data tidying and getting South Africa's sector level data
+SA_returns_data <-
   ReturnsData %>% 
-  select(date, Ticker, Universe, BICS_LEVEL_1_SECTOR_NAME, Return)%>%
+  select(-Short.Name, -BICS_LEVEL_2_INDUSTRY_GROUP_NAME, -BICS_LEVEL_3_INDUSTRY_NAME, -Market.Cap)%>%
   filter(Universe == "JALSHAll")
+  
+# removing NA's
+SA_returns_data <- na.omit(SA_returns_data)#%>% 
+
+SA_returns_data <- 
+  spread(SA_returns_data, BICS_LEVEL_1_SECTOR_NAME, Return)# spreading the data by sector and returns
+# other combinations don't work
+# A lot of new NA's are created, and removing leaves the data blank
 
 
 #creating returns 
 
 # dlog returns:
-SA_rtn <- (
-  diff( log(SA_returnsdata %>% arrange(date) %>% tbl_xts()), lag=1))*100 
+SA_returns_data <- (
+  diff( log(SA_returns_data %>% arrange(date) %>% tbl_xts()), lag=1))*100 
 # this code returns the following Warning message:
 #In log(Sector_SA_returnsdata %>% arrange(date) %>% tbl_xts()) :
- # NaNs produced
+ # NaNs produced. Maybe we dont need to run this code if returns are already #calculated
 
 
 #drop the first observation and corresponding date:
