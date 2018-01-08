@@ -2,6 +2,21 @@
 title: "VolstudyREADME"
 output: html_document
 ---
+
+
+
+
+
+
+<!-- ============================================================================== -->
+<!-- SEE EVERYWHERE WHERE I TYPED NICOCOMMENT: -->
+<!-- ============================================================================== -->
+
+
+
+
+
+
 #Aim
 
 The aim of this project is to uncover the extent of correlation among South African assets at sector level. Thereafter, other countries are analysed to provide a benchmark of some sort for South Africa in this context.The data will be stratified such that, the highest correclation (80%) will be compared across countries, and so will the lowest (20%).
@@ -75,6 +90,7 @@ SA_rtn <-aggregate(. ~date, data=SA_rtn, sum)
 #Step 4: convert to xts
 Convert dataset to xts in  order to make running certain functions easier
 ```{r}
+<<<<<<< HEAD
 SA_rtn <- tbl_df(SA_rtn)
 SA_rtn <- tbl2xts::tbl_xts(SA_rtn)
 ```
@@ -128,11 +144,79 @@ model = c("DCC", "aDCC")[1]) # Change to aDCC e.g.
 # D) Enable clustering for speed:
 cl = makePSOCKcluster(10)
 ```
+=======
+
+
+
+
+library(rmsfuns)
+load_pkg(c("tidyverse", "tbl2xts", "devtools", "lubridate", "PerformanceAnalytics", "ggplot2"))
+
+# NICOCOMMENT: Avoid fixed adresses like this: I don't have the same root on my computer of course:
+# ReturnsData <- 
+#   read_rds("C:/Users/tookho.putsoane/Dropbox/ReturnData/ReturnsData.rds")
+
+# Use this always (as you are working in a project environment, see my tuts on this):
+ReturnsData <- 
+  read_rds("ReturnData/ReturnsData.rds")
+
+
+ #          col_types = cols(.default = "d", Date = "D")) ##did not work, please help##
+# NICOCOMMENT: Irrelevant!
+
+
+
+#data tidying and getting South Africa's sector level data
+SA_returns_data <-
+  ReturnsData %>% 
+  select(-Short.Name, -BICS_LEVEL_2_INDUSTRY_GROUP_NAME, -BICS_LEVEL_3_INDUSTRY_NAME, -Market.Cap)%>%
+  filter(Universe == "JALSHAll")
+  
+
+# NICOCOMMENT: Not how we deal with NAs.
+# removing NA's
+# SA_returns_data <- na.omit(SA_returns_data)#%>% 
+
+# NICOCOMMENT: This is how we deal with NA in this context:
+SA_returns_data <- 
+  SA_returns_data %>% mutate(Return = coalesce(Return, 0))
+
+# ===============================================
+# NICOCOMMENT: WHY ARE YOU SPREADING?!!!!!!!!!!
+# I very sincerely hope you went through my tuts. In particular, you have basically two tuts that you need to know very well. I definitely did not spread and calculate returns there!!!!
+
+# SA_returns_data <- 
+#   spread(SA_returns_data, BICS_LEVEL_1_SECTOR_NAME, Return)# spreading the data by sector and returns
+# other combinations don't work
+# A lot of new NA's are created, and removing leaves the data blank
+
+# ===============================================
+
+
+# NICOCOMMENT: Guys, the following is really a bit embarassing and scares me:
+# ===============================================
+#creating returns 
+
+# dlog returns:
+# SA_returns_data <- (
+#   diff( log(SA_returns_data %>% arrange(date) %>% tbl_xts()), lag=1))*100 
+# this code returns the following Warning message:
+#In log(Sector_SA_returnsdata %>% arrange(date) %>% tbl_xts()) :
+ # NaNs produced. Maybe we dont need to run this code if returns are already #calculated
+# ===============================================
+
+
+# NICOCOMMENT: The column name is already Return. Why would you calculate return of returns?! Hence the error...
+
+# Use the return column as is and keep it in tidy format at all times.
+# ===============================================
+>>>>>>> origin/master
 
 ```{r}
 # First, fit the univariate series for each column:
 multf = multifit(multi_univ_garch_spec, SA_rtn, cluster = cl)
 
+<<<<<<< HEAD
 # Now we can use multf to estimate the dcc model using our dcc.spec:
 fit.dcc = dccfit(spec.dcc,
 data = SA_rtn,
@@ -148,6 +232,32 @@ fit = multf)
 RcovList <- rcov(fit.dcc) 
 covmat = matrix(RcovList,nrow(SA_rtn),ncol(SA_rtn)*ncol(SA_rtn),byrow=TRUE)
 mc1 = MCHdiag(SA_rtn,covmat)
+=======
+#drop the first observation and corresponding date:
+# SA_rtn <- SA_returns_data[-1,]
+# Nope. Do this:
+
+  SA_returns_data <- 
+  SA_returns_data %>% filter(date > first(date))
+
+
+
+# Ignore this part:
+  
+# Center the data:
+
+# SA_rtn <- scale(SA_rtn,center=T,scale=F) 
+# Nope, do this:
+
+# colnames(SA_rtn) <- 
+#   colnames(SA_rtn) %>% gsub("BICS_LEVEL_1_SECTOR_NAME.","",.) %>%                   gsub(".Close","",.)
+
+###Attention Nico###
+# And clean it using Boudt's technique:
+# SA_rtn <- Return.clean(SA_rtn, method = c("none", "boudt", "geltner")[2], alpha=0.01)
+# This code returs the following error message: 
+#Error in 1:T : argument of length 0
+>>>>>>> origin/master
 ```
 
 # saving the time-varying correlations as specified by the DCC model, 
@@ -165,6 +275,7 @@ cl <- makePSOCKcluster(10)
 ```
 
 
+<<<<<<< HEAD
 ```{r}
 multf <- multifit(multi_univ_garch_spec, SA_rtn, cluster = cl)
 fit.gogarch <- gogarchfit(spec.go,
@@ -183,6 +294,11 @@ print(fit.gogarch)
 gog.time.var.cor <- rcor(fit.gogarch)
 gog.time.var.cor <- aperm(gog.time.var.cor,c(3,2,1))
 dim(gog.time.var.cor) <- c(nrow(gog.time.var.cor), ncol(gog.time.var.cor)^2)
+=======
+<!-- NICOCOMMENT: -->
+<!-- Please follow the tutorial. -->
+
+>>>>>>> origin/master
 
 # And now we can rename our columns the same way as before. 
 
