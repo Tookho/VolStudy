@@ -34,67 +34,161 @@ load_pkg(c("tidyverse", "tbl2xts", "devtools", "lubridate", "PerformanceAnalytic
 #Paper
 ## Introduction
 
-Here I intend introducing the paper and what it does...
+Here we intend introducing the paper and what it does...
 
 ##methodology
 list code
   (R)
-list.files("code, full.names = TRUE")
-
-#data import
-
-
+rm(list = ls())
+.rs.restartR()
+# Step 1: Load data and packages
+In this step we load the necessary packages to be used for our analysis throughout. We also load the financial data the analyis will be conducted on
 ```{r}
 library(rmsfuns)
-load_pkg(c("tidyverse", "tbl2xts", "devtools", "lubridate", "PerformanceAnalytics", "ggplot2"))
-ReturnsData <- 
-  read_rds("C:/Users/tookho.putsoane/Dropbox/ReturnData/ReturnsData.rds")
- #          col_types = cols(.default = "d", Date = "D")) ##did not work, please help##
+load_pkg("MTS")
+load_pkg(c("devtools", "rugarch","rmgarch", "forecast", "tidyr", "tbl2xts", "lubridate", "readr", "PerformanceAnalytics", "ggplot2", "dplyr", "ggthemes"))
+#load data
+ReturnsData <- readRDS("C:/Finmetrics/ReturnsData.rds")
+```
 
-#data tidying and getting South Africa's sector level data
-SA_returns_data <-
+#Step 2: Seperating SOuth African data
+Here we filter out South African data which is the country of choice and split our data by sector level returns
+```{r}
+SA_rtn <-
   ReturnsData %>% 
-  select(-Short.Name, -BICS_LEVEL_2_INDUSTRY_GROUP_NAME, -BICS_LEVEL_3_INDUSTRY_NAME, -Market.Cap)%>%
-  filter(Universe == "JALSHAll")
-  
-# removing NA's
-SA_returns_data <- na.omit(SA_returns_data)#%>% 
+  select(-Market.Cap, -BICS_LEVEL_2_INDUSTRY_GROUP_NAME, -BICS_LEVEL_3_INDUSTRY_NAME,-Ticker)%>%
+  filter(!is.na(BICS_LEVEL_1_SECTOR_NAME))%>%
+  filter(Universe == "JALSHAll") %>% select(-Universe) %>% mutate(Return = coalesce(Return, 0))%>%
+  spread(key = BICS_LEVEL_1_SECTOR_NAME, value = Return)%>%
+ select(-Short.Name) 
 
-SA_returns_data <- 
-  spread(SA_returns_data, BICS_LEVEL_1_SECTOR_NAME, Return)# spreading the data by sector and returns
-# other combinations don't work
-# A lot of new NA's are created, and removing leaves the data blank
+#set nas equal to zero
+SA_rtn[is.na(SA_rtn)] <- 0
+```
 
+#Step 3: Sum by date: getting total sector daily return
+This is  to get total daily sector return, given the difference in the number of companies per industry
+```{r}
+SA_rtn <-aggregate(. ~date, data=SA_rtn, sum)
+```
 
-#creating returns 
-
-# dlog returns:
-SA_returns_data <- (
-  diff( log(SA_returns_data %>% arrange(date) %>% tbl_xts()), lag=1))*100 
-# this code returns the following Warning message:
-#In log(Sector_SA_returnsdata %>% arrange(date) %>% tbl_xts()) :
- # NaNs produced. Maybe we dont need to run this code if returns are already #calculated
-
-
-#drop the first observation and corresponding date:
-SA_rtn <- SA_rtn[-1,]
-# Center the data:
-SA_rtn <- scale(SA_rtn,center=T,scale=F) 
-
-colnames(SA_rtn) <- 
-  colnames(SA_rtn) %>% gsub("BICS_LEVEL_1_SECTOR_NAME.","",.) %>%                   gsub(".Close","",.)
-
-###Attention Nico###
-# And clean it using Boudt's technique:
-SA_rtn <- Return.clean(SA_rtn, method = c("none", "boudt", "geltner")[2], alpha=0.01)
-# This code returs the following error message: 
-#Error in 1:T : argument of length 0
+#Step 4: convert to xts
+Convert dataset to xts in  order to make running certain functions easier
+```{r}
+SA_rtn <- tbl_df(SA_rtn)
+SA_rtn <- tbl2xts::tbl_xts(SA_rtn)
 ```
 
 
+#Step 5: clean and scale returns
+```{r}
+SA_rtn <- scale(SA_rtn,center=T,scale=F)
+SA_rtn <- Return.clean(SA_rtn, method = c("none", "boudt", "geltner")[2], alpha = 0.01)
+```
+#Step 6: running some Heteroscedasticity tests
+```{r}
+load_pkg("MTS")
+MarchTest(SA_rtn)
+```
+```{r}
+SA_rtnv <- VAR(SA_rtn,1)
+```
+#Saving the VAR(1) model's residuals.
+```{r}
+et <- SA_rtnv$residuals  
+```
+#doing a GARCH test on remaining series heteroskedasticity:
+```{r}
+MarchTest(et)
+```
 
 
+#Step 7:GO-GARCH Specifications
+Identifying GO-GARCH specifications to be used when fitting the model
+```{r}
+## A) Univariate GARCH specifications:
+uspec <- ugarchspec(variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)),
+mean.model = list(armaOrder = c(1, 0), include.mean = TRUE),
+distribution.model = "sstd")
+```
 
+```{r}
+# B) Repeat uspec n times. This specification should be self-explanatory...
+multi_univ_garch_spec <- multispec(replicate(ncol(SA_rtn), uspec))
+
+# C) DCC Specs
+spec.dcc = dccspec(multi_univ_garch_spec,
+dccOrder = c(1, 1),
+distribution = 'mvnorm',
+lag.criterion = c("AIC", "HQ", "SC", "FPE")[1],
+model = c("DCC", "aDCC")[1]) # Change to aDCC e.g.
+```
+
+```{r}
+# D) Enable clustering for speed:
+cl = makePSOCKcluster(10)
+```
+
+```{r}
+# First, fit the univariate series for each column:
+multf = multifit(multi_univ_garch_spec, SA_rtn, cluster = cl)
+
+# Now we can use multf to estimate the dcc model using our dcc.spec:
+fit.dcc = dccfit(spec.dcc,
+data = SA_rtn,
+solver = 'solnp',
+cluster = cl,
+fit.control = list(eval.se = FALSE),
+fit = multf)
+
+```
+
+#testing the model's fit:
+```{r}
+RcovList <- rcov(fit.dcc) 
+covmat = matrix(RcovList,nrow(SA_rtn),ncol(SA_rtn)*ncol(SA_rtn),byrow=TRUE)
+mc1 = MCHdiag(SA_rtn,covmat)
+```
+
+# saving the time-varying correlations as specified by the DCC model, 
+```{r}
+dcc.time.var.cor <- rcor(fit.dcc)
+print(dcc.time.var.cor[,,1:3])
+```
+#Step 7:Fitting and Running GO-GARCH model
+distribution.model = 'mvnorm', # or manig.
+Here we fit and run a GO-GARCH model based on the specifications identified in the previous step
+```{r}
+spec.go <- gogarchspec(multi_univ_garch_spec,
+ica = 'fastica') # Note: we use the fastICA
+cl <- makePSOCKcluster(10)
+```
+
+
+```{r}
+multf <- multifit(multi_univ_garch_spec, SA_rtn, cluster = cl)
+fit.gogarch <- gogarchfit(spec.go,
+data = SA_rtn,
+solver = 'hybrid',
+cluster = cl,
+gfun = 'tanh',
+maxiter1 = 40000,
+epsilon = 1e-08,
+rseed = 100)
+
+print(fit.gogarch)
+```
+# Extracting time-varying conditional correlations: 
+```{r}
+gog.time.var.cor <- rcor(fit.gogarch)
+gog.time.var.cor <- aperm(gog.time.var.cor,c(3,2,1))
+dim(gog.time.var.cor) <- c(nrow(gog.time.var.cor), ncol(gog.time.var.cor)^2)
+
+# And now we can rename our columns the same way as before. 
+
+gog.time.var.cor <-
+renamingdcc(ReturnSeries = SA_rtn, DCC.TV.Cor = gog.time.var.cor)
+```
 
 
 ##list review
